@@ -1,0 +1,75 @@
+// src/data/remote.js — conexión real con Supabase (la sincronización solo usa esta interfaz).
+import { getSupabase } from './supabase.js'
+
+const BUCKET = 'product-images'
+const coded = (message, code) => Object.assign(new Error(message), { code })
+const looksOffline = (e, status) => status === 0 || /failed to fetch|network|load failed|fetch failed/i.test(String(e?.message || ''))
+const looksUnauthorized = (e, status) => status === 401 || e?.code === 'PGRST301' || /jwt|expired/i.test(String(e?.message || ''))
+
+export function createSupabaseRemote() {
+  const sb = getSupabase()
+
+  /** Ejecuta una consulta. Si el servidor dice "sin autorización" renueva el token y reintenta una vez. */
+  async function call(run) {
+    let res = await run()
+    if (res.error && looksOffline(res.error, res.status)) throw coded('Sin conexión', 'OFFLINE')
+    if (res.error && looksUnauthorized(res.error, res.status)) {
+      const { data, error } = await sb.auth.refreshSession()
+      if (error && looksOffline(error, error.status)) throw coded('Sin conexión', 'OFFLINE')
+      if (error || !data?.session) throw coded('Tu sesión venció. Inicia sesión de nuevo.', 'SESSION_EXPIRED')
+      res = await run()
+      if (res.error && looksUnauthorized(res.error, res.status)) throw coded('Tu sesión venció. Inicia sesión de nuevo.', 'SESSION_EXPIRED')
+    }
+    if (res.error) throw res.error
+    return res.data
+  }
+
+  return {
+    async hasSession() {
+      const { data } = await sb.auth.getSession()
+      const s = data?.session
+      if (!s) return false
+      if ((s.expires_at || 0) * 1000 < Date.now() + 30_000) {          // token por vencer o vencido: renovarlo antes de sincronizar
+        const { error } = await sb.auth.refreshSession()
+        if (error) {
+          if (looksOffline(error, error.status)) throw coded('Sin conexión', 'OFFLINE')
+          return false
+        }
+      }
+      return true
+    },
+    /** Si el perfil del usuario no existe en el servidor (usuario creado antes del esquema), lo crea. */
+    async ensureProfile() {
+      const { data: auth } = await sb.auth.getSession()
+      const u = auth?.session?.user
+      if (!u) return
+      const found = await call(() => sb.from('profiles').select('id').eq('id', u.id).limit(1))
+      if (!found?.length) {
+        await call(() => sb.from('profiles').insert({ id: u.id, name: u.user_metadata?.name || String(u.email || '').split('@')[0] }))
+      }
+    },
+    select(table, { since, limit }) {
+      return call(() => sb.from(table).select('*').gte('updated_at', since)
+        .order('updated_at', { ascending: true }).order(table === 'settings' ? 'key' : 'id').limit(limit))
+    },
+    upsert(table, rows, onConflict) {
+      return call(() => sb.from(table).upsert(rows, { onConflict }).select())
+    },
+    findInvoices(numbers) {
+      return call(() => sb.from('sales').select('id,invoice_number').in('invoice_number', numbers))
+    },
+    async maxInvoice(prefix) {
+      const rows = await call(() => sb.from('sales').select('invoice_number').like('invoice_number', `${prefix}-%`)
+        .order('invoice_number', { ascending: false }).limit(1))
+      return rows?.[0]?.invoice_number ?? null
+    },
+    async uploadImage(path, blob) {
+      await call(() => sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/webp', upsert: true }))
+    },
+    async removeImage(path) { await call(() => sb.storage.from(BUCKET).remove([path])) },
+    async downloadImage(path) {
+      const { data, error } = await sb.storage.from(BUCKET).download(path)
+      return error ? null : data
+    },
+  }
+}
