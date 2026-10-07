@@ -6,8 +6,7 @@ const coded = (message, code) => Object.assign(new Error(message), { code })
 const looksOffline = (e, status) => status === 0 || /failed to fetch|network|load failed|fetch failed/i.test(String(e?.message || ''))
 const looksUnauthorized = (e, status) => status === 401 || e?.code === 'PGRST301' || /jwt|expired/i.test(String(e?.message || ''))
 
-export function createSupabaseRemote() {
-  const sb = getSupabase()
+export function createSupabaseRemote(sb = getSupabase()) {
 
   /** Ejecuta una consulta. Si el servidor dice "sin autorización" renueva el token y reintenta una vez. */
   async function call(run) {
@@ -67,7 +66,13 @@ export function createSupabaseRemote() {
       await call(() => sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/webp', upsert: true }))
     },
     async removeImage(path) { await call(() => sb.storage.from(BUCKET).remove([path])) },
+    /** Descarga una foto SOLO si existe (se consulta antes: pedir un archivo inexistente deja un error 400 en la consola). */
     async downloadImage(path) {
+      const slash = path.lastIndexOf('/')
+      const folder = slash > 0 ? path.slice(0, slash) : ''
+      const name = path.slice(slash + 1)
+      const { data: found, error: listError } = await sb.storage.from(BUCKET).list(folder, { limit: 5, search: name })
+      if (listError || !found?.some((o) => o.name === name)) return null
       const { data, error } = await sb.storage.from(BUCKET).download(path)
       return error ? null : data
     },
