@@ -214,3 +214,36 @@ test('tras un error, la sincronización automática espera antes de reintentar',
   assert.equal(getSyncStatus().state, 'error')
   assert.deepEqual(await autoSync(), { ok: false, reason: 'cooldown' })   // no repite en bucle
 })
+
+test('fotos: no se piden las de productos eliminados y las que faltan no se piden en bucle', async () => {
+  remote.session = true; remote.upsert = FakeRemote.prototype.upsert.bind(remote); remote.failTable = null
+  let calls = []
+  const realDownload = remote.downloadImage.bind(remote)
+  remote.downloadImage = async (path) => { calls.push(path); return realDownload(path) }
+  const mkProduct = (sku, path, active) => { const id = uuid(); remote.rows('products').set(id, { id, name: sku, sku, barcode: null, description: null, category_id: null, brand_id: null, supplier_id: null, cost_price: 1, sale_price: 2, stock_min: 0, image_path: path, is_active: active, created_at: remote.tick(), updated_at: remote.tick() }) }
+  mkProduct('INACT', 'products/eliminado.webp', false)
+  mkProduct('FALTA', 'products/no-subida.webp', true)
+
+  await runSync(remote); await runSync(remote); await runSync(remote)
+  assert.equal(calls.filter((p) => p.includes('eliminado')).length, 0)    // producto eliminado: ni se intenta
+  assert.equal(calls.filter((p) => p.includes('no-subida')).length, 1)    // la que falta se pide una sola vez, no en cada ciclo
+})
+
+test('las fotos pendientes se suben aunque falle la subida de una tabla', async () => {
+  const path = 'products/pendiente-' + uuid() + '.webp'
+  await db.images.put({ path, blob: new Blob(['x'], { type: 'image/webp' }), uploaded: 0, deleted: 0, updated_at: new Date().toISOString() })
+  await db.cash_registers.put({ ...(await db.cash_registers.toArray())[0], _dirty: 1, updated_at: new Date().toISOString() })
+  remote.failTable = 'cash_registers'
+  await assert.rejects(runSync(remote), /subir cash_registers/)
+  assert.ok(remote.images.has(path))
+  remote.failTable = null
+  assert.equal((await runSync(remote)).ok, true)
+})
+
+test('al eliminar un producto su fila deja de apuntar a una foto borrada', async () => {
+  const p = await inv.createProduct({ name: 'Con foto', sku: 'FOTO-DEL', imageData: webp() })
+  assert.ok((await db.products.get(p.id)).image_path)
+  await inv.deleteProduct(p.id)
+  const row = await db.products.get(p.id)
+  assert.deepEqual([row.is_active, row.image_path], [false, null])
+})

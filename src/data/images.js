@@ -7,6 +7,10 @@ const MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 const DATA_PREFIX = 'data:image/webp;base64,'
 const urlCache = new Map()
 let remoteFetcher = null
+const missingUntil = new Map()   // fotos que el servidor no tiene: no se vuelven a pedir durante 10 min
+const RETRY_MS = 10 * 60 * 1000
+export const isKnownMissing = (path) => (missingUntil.get(path) || 0) > Date.now()
+export const markMissing = (path) => { missingUntil.set(path, Date.now() + RETRY_MS) }
 /** La sincronización registra cómo descargar una foto que aún no está en este dispositivo. */
 export const setRemoteImageFetcher = (fn) => { remoteFetcher = fn }
 
@@ -62,10 +66,11 @@ export async function getImageUrl(path) {
   if (!path) return null
   if (urlCache.has(path)) return urlCache.get(path)
   let rec = await db.images.get(path)
-  if (!rec && remoteFetcher) {
+  if (!rec && remoteFetcher && !isKnownMissing(path)) {
     try {
       const blob = await remoteFetcher(path)
       if (blob) { rec = { path, blob, uploaded: 1, deleted: 0, updated_at: nowIso() }; await db.images.put(rec) }
+      else markMissing(path)
     } catch { /* sin conexión: se mostrará cuando haya internet */ }
   }
   if (!rec?.blob || rec.deleted) return null

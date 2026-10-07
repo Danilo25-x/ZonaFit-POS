@@ -4,7 +4,7 @@
 // Si no hay internet o sesión, no hace nada: la app sigue funcionando con los datos locales.
 import Dexie from 'dexie'
 import { db, save, uuid, nowIso, onWrite } from './db.js'
-import { setRemoteImageFetcher } from './images.js'
+import { setRemoteImageFetcher, isKnownMissing, markMissing } from './images.js'
 import { createSupabaseRemote } from './remote.js'
 
 const PUSH_ORDER = ['settings', 'categories', 'brands', 'suppliers', 'customers', 'products', 'product_variants',
@@ -177,14 +177,16 @@ async function pullTable(remote, table) {
 
 async function prefetchImages(remote, max = 25) {
   const [prods, vars] = await Promise.all([db.products.toArray(), db.product_variants.toArray()])
-  const wanted = [...new Set([...prods, ...vars].map((r) => r.image_path).filter(Boolean))]
+  // Solo fotos de productos y variantes activos (las de productos eliminados ya no existen en el servidor).
+  const wanted = [...new Set([...prods, ...vars].filter((r) => r.is_active).map((r) => r.image_path).filter(Boolean))]
   let done = 0
   for (const path of wanted) {
     if (done >= max) break
-    if (await db.images.get(path)) continue
+    if (isKnownMissing(path) || (await db.images.get(path))) continue
     try {
       const blob = await remote.downloadImage(path)
       if (blob) await db.images.put({ path, blob, uploaded: 1, deleted: 0, updated_at: nowIso() })
+      else markMissing(path)       // el servidor aún no la tiene (la sube el otro dispositivo): reintento en 10 min
     } catch { /* se reintenta en el próximo ciclo */ }
     done += 1
   }
@@ -242,10 +244,8 @@ export async function runSync(remote) {
 
   // Un fallo al subir NO debe impedir bajar los datos (p. ej. un dispositivo nuevo): se reporta al final.
   let pushError = null
-  try {
-    for (const t of PUSH_ORDER) await pushTable(remote, t)
-    await pushImages(remote)
-  } catch (e) { pushError = e }
+  try { for (const t of PUSH_ORDER) await pushTable(remote, t) } catch (e) { pushError = e }
+  try { await pushImages(remote) } catch (e) { pushError ||= e }   // las fotos se suben aunque falle alguna tabla
 
   for (const t of PULL_ORDER) {
     try { await pullTable(remote, t) } catch (e) { throw describe(`bajar ${t}`, e) }

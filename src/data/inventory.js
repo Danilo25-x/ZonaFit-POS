@@ -239,7 +239,7 @@ export async function deleteProduct(id) {
   const existing = await db.products.get(id)
   if (!existing) return { ok: false, error: 'Producto no encontrado' }
   await db.transaction('rw', TX(), async () => {
-    await save('products', { ...existing, is_active: false })
+    await save('products', { ...existing, is_active: false, image_path: null })
     await audit('delete_product', 'product', id, { sku: existing.sku, imageDeleted: Boolean(existing.image_path) })
   })
   if (existing.image_path) await images.deleteImage(existing.image_path)
@@ -327,7 +327,7 @@ export async function deleteVariant(id) {
   const variant = await db.product_variants.get(id)
   if (!variant) return { ok: false, error: 'Variante no encontrada' }
   await db.transaction('rw', TX(), async () => {
-    await save('product_variants', { ...variant, is_active: false })
+    await save('product_variants', { ...variant, is_active: false, image_path: null })
     await audit('delete_variant', 'product_variant', id, {})
   })
   if (variant.image_path) await images.deleteImage(variant.image_path)
