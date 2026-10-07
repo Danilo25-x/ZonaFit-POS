@@ -7,7 +7,7 @@ import * as inv from '../src/data/inventory.js'
 import * as sales from '../src/data/sales.js'
 import * as cash from '../src/data/cash.js'
 import * as settings from '../src/data/settings.js'
-import { runSync, syncNow, countPending, ensureStockLedger, installWriteHook, getSyncStatus } from '../src/data/sync.js'
+import { runSync, syncNow, autoSync, countPending, ensureStockLedger, installWriteHook, getSyncStatus } from '../src/data/sync.js'
 
 class FakeRemote {
   constructor() { this.t = {}; this.images = new Map(); this.session = true; this.clock = Date.parse('2026-10-03T12:00:00Z'); this.upserts = []; this.failTable = null; this.profileChecks = 0 }
@@ -22,6 +22,11 @@ class FakeRemote {
   }
   async upsert(table, rows, pk) {
     if (table === this.failTable) throw { message: 'insert or update on table "cash_registers" violates foreign key constraint', details: 'Key (user_id) is not present in table "profiles".', code: '23503' }
+    for (const r of rows) {
+      if (table === 'products' && r.category_id && !this.rows('categories').has(r.category_id)) {
+        throw { message: 'insert or update on table "products" violates foreign key constraint "products_category_id_fkey"', details: 'Key is not present in table "categories".', code: '23503' }
+      }
+    }
     this.upserts.push([table, rows.length]); const now = this.tick(); const out = []
     for (const r of rows) {
       if (table === 'sales' && [...this.rows('sales').values()].some((x) => x.invoice_number === r.invoice_number && x.id !== r.id)) {
@@ -180,4 +185,32 @@ test('sin red o con sesión vencida no se muestra como error de sincronización'
   remote.upsert = realUpsert
   assert.equal((await syncNow(() => remote)).ok, true)
   assert.equal(getSyncStatus().state, 'idle'); assert.equal(await countPending(), 0)
+})
+
+test('categoría borrada en el servidor: se vuelve a subir y el producto sincroniza', async () => {
+  const { uuid: id } = await import('../src/data/db.js')
+  const catId = id()
+  await db.categories.put({ id: catId, name: 'Camisas', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), _dirty: 0 })   // "ya sincronizada"
+  const p = await inv.createProduct({ name: 'Con categoría', sku: 'CAT-1', categoryId: catId })
+  assert.equal((await runSync(remote)).ok, true)
+  assert.ok(remote.rows('categories').has(catId))                       // se reenvió la categoría que faltaba
+  assert.equal(remote.rows('products').get(p.id).category_id, catId)
+  assert.equal(await countPending(), 0)
+})
+
+test('referencia opcional que no existe ni en el dispositivo se anula y no bloquea', async () => {
+  const p = await inv.createProduct({ name: 'Categoría fantasma', sku: 'FAN-1', categoryId: uuid() })
+  assert.equal((await runSync(remote)).ok, true)
+  assert.equal(remote.rows('products').get(p.id).category_id, null)
+  assert.equal((await db.products.get(p.id)).category_id, null)
+  assert.equal(await countPending(), 0)
+})
+
+test('tras un error, la sincronización automática espera antes de reintentar', async () => {
+  remote.session = true
+  remote.upsert = async () => { throw { message: 'boom', code: 'XX000' } }
+  await db.customers.put({ ...(await db.customers.toArray())[0], _dirty: 1, updated_at: new Date().toISOString() })
+  await syncNow(() => remote)
+  assert.equal(getSyncStatus().state, 'error')
+  assert.deepEqual(await autoSync(), { ok: false, reason: 'cooldown' })   // no repite en bucle
 })

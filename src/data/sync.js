@@ -91,7 +91,39 @@ async function renumberInvoices(remote, rows) {
   }
 }
 
-async function pushTable(remote, table) {
+// Tablas de las que depende cada tabla (llaves foráneas) y referencias opcionales que se pueden anular si quedaron colgando.
+const PARENTS = {
+  products: ['categories', 'brands', 'suppliers'], product_variants: ['products'],
+  sales: ['cash_registers', 'customers'], sale_items: ['sales', 'product_variants'], payments: ['sales'], invoices: ['sales'],
+  cash_expenses: ['cash_registers'], cash_income: ['cash_registers'], inventory_movements: ['product_variants'],
+  credits: ['customers', 'sales'], credit_payments: ['credits'],
+}
+const OPTIONAL_REFS = {
+  products: [['category_id', 'categories'], ['brand_id', 'brands'], ['supplier_id', 'suppliers']],
+  sales: [['customer_id', 'customers']], sale_items: [['variant_id', 'product_variants']],
+}
+
+/**
+ * Error 23503 = el servidor no tiene una fila de la que depende (p. ej. alguien borró una categoría en el panel
+ * de Supabase). 1) se vuelven a subir las tablas "padre"; 2) si la referencia ni siquiera existe en este
+ * dispositivo, se anula (solo en campos opcionales) para no bloquear toda la sincronización.
+ */
+async function healReferences(remote, table, seen = new Set()) {
+  for (const parent of PARENTS[table] || []) {
+    if (seen.has(parent)) continue
+    seen.add(parent)
+    await healReferences(remote, parent, seen)
+    await db.table(parent).toCollection().modify((r) => { r._dirty = 1 })
+    await pushTable(remote, parent, false)
+  }
+  for (const [col, parent] of OPTIONAL_REFS[table] || []) {
+    for (const row of await db.table(table).where('_dirty').equals(1).toArray()) {
+      if (row[col] && !(await db.table(parent).get(row[col]))) await save(table, { ...row, [col]: null })
+    }
+  }
+}
+
+async function pushTable(remote, table, heal = true) {
   const pk = pkOf(table)
   const dirty = await db.table(table).where('_dirty').equals(1).toArray()
   for (const group of chunks(dirty, BATCH)) {
@@ -100,7 +132,10 @@ async function pushTable(remote, table) {
       for (let i = 0; i < group.length; i++) group[i] = await db.sales.get(group[i].id)
     }
     let returned
-    try { returned = await remote.upsert(table, group.map(clean), pk) } catch (e) { throw describe(`subir ${table}`, e) }
+    try { returned = await remote.upsert(table, group.map(clean), pk) } catch (e) {
+      if (heal && e?.code === '23503') { await healReferences(remote, table); return pushTable(remote, table, false) }
+      throw describe(`subir ${table}`, e)
+    }
     await markClean(table, pk, group, returned)
   }
 }
@@ -225,6 +260,7 @@ export async function runSync(remote) {
 }
 
 let running = null
+let errorAt = 0
 export function syncNow(remoteFactory = createSupabaseRemote) {
   if (running) return running
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -248,12 +284,19 @@ export function syncNow(remoteFactory = createSupabaseRemote) {
         return { ok: false, reason: 'signedout' }
       }
       console.error('[sync]', e)
+      errorAt = Date.now()
       setStatus({ state: 'error', error: e?.message || 'Error de sincronización' })
       await refreshPending().catch(() => {})
       return { ok: false, error: e?.message }
     } finally { running = null }
   })()
   return running
+}
+
+/** Sincronización automática: tras un error espera 30 s antes de reintentar (tocar el indicador sí reintenta al instante). */
+export function autoSync() {
+  if (status.state === 'error' && Date.now() - errorAt < 30_000) return Promise.resolve({ ok: false, reason: 'cooldown' })
+  return syncNow()
 }
 
 let writeTimer = null
@@ -266,7 +309,7 @@ export function installWriteHook() {
   onWrite(() => {
     Dexie.ignoreTransaction(() => { refreshPending().catch(() => {}) })
     clearTimeout(writeTimer)
-    writeTimer = setTimeout(() => Dexie.ignoreTransaction(() => { syncNow() }), 4000)
+    writeTimer = setTimeout(() => Dexie.ignoreTransaction(() => { autoSync() }), 4000)
   })
 }
 
@@ -278,10 +321,10 @@ export function startAutoSync() {
   setRemoteImageFetcher(async (path) => { try { return await factory().downloadImage(path) } catch { return null } })
 
   installWriteHook()
-  window.addEventListener('online', () => setTimeout(() => syncNow(), 1500))   // la red tarda un instante en estabilizarse
+  window.addEventListener('online', () => setTimeout(() => autoSync(), 1500))   // la red tarda un instante en estabilizarse
   window.addEventListener('offline', () => setStatus({ state: 'offline' }))
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncNow() })
-  setInterval(() => syncNow(), 60_000)
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) autoSync() })
+  setInterval(() => autoSync(), 60_000)
   refreshPending().catch(() => {})
-  syncNow()
+  autoSync()
 }
