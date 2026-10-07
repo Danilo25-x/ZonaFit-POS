@@ -1,7 +1,7 @@
 // src/pages/Ventas/VentasPage.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ScanBarcode, X, Minus, Plus, Trash2, Wallet, ShoppingBag, Lock, LockOpen, Receipt, Eye, Shirt, TriangleAlert } from 'lucide-react'
+import { ScanBarcode, X, Minus, Plus, Trash2, Wallet, ShoppingBag, Lock, LockOpen, Receipt, Eye, Shirt, TriangleAlert, ChevronUp } from 'lucide-react'
 import PageContainer   from '../../components/UI/PageContainer'
 import PrimaryButton   from '../../components/UI/PrimaryButton'
 import SearchBar       from '../../components/UI/SearchBar'
@@ -56,6 +56,7 @@ export default function VentasPage() {
   const [scanInput, setScanInput] = useState('')
   const [selecting, setSelecting] = useState(null)
   const [paying, setPaying] = useState(false)
+  const [cartOpen, setCartOpen] = useState(false)   // en celular/tablet el resumen va plegado abajo; se despliega al tocarlo
   const [historial, setHistorial] = useState([])
   const [detailId, setDetailId] = useState(null)
   const [histSearch, setHistSearch] = useState('')
@@ -129,6 +130,7 @@ export default function VentasPage() {
 
   const confirmSale = async ({ payments, notes, customerId, installments, financingPct }) => {
     setPaying(false)
+    setCartOpen(false)
     const r = await window.electronAPI.sales.createSale({ items: cart.map(i => ({ variantId: i.variantId, qty: i.qty, discountPct: 0 })), payments, notes, customerId, installments, financingPct })
     if (r.ok) { notify(`Venta registrada — ${r.invoice}`); setCart([]); loadCaja(); setReload(n => n + 1) }
     else notify(r.error, 'error')
@@ -217,10 +219,15 @@ export default function VentasPage() {
             )}
           </div>
 
-          <aside className="card cart" aria-label="Resumen de la venta">
-            <div className="card__head">
+          <aside className={`card cart ${cartOpen ? 'cart--open' : ''}`} aria-label="Resumen de la venta">
+            <div className="card__head cart__head" role="button" tabIndex={0} aria-expanded={cartOpen}
+              onClick={() => setCartOpen(o => !o)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCartOpen(o => !o) } }}>
               <h2 className="card__title">Resumen de la venta</h2>
-              <span className={`badge ${cart.length ? '' : 'badge--neutral'}`}>{units} {units === 1 ? 'unidad' : 'unidades'}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <span className={`badge ${cart.length ? '' : 'badge--neutral'}`}>{units} {units === 1 ? 'unidad' : 'unidades'}</span>
+                <ChevronUp className="cart__chev" size={18} aria-hidden="true" />
+              </span>
             </div>
             <div className="cart__lines">
               {cart.length === 0 ? (

@@ -205,3 +205,38 @@
 .hero__top,.hero__label{color:rgba(255,255,255,.92)}
 .hero__note{color:rgba(255,255,255,.84)}
 .total-block small{color:rgba(255,255,255,.9)}
+
+/* ═══ Ventas: el resumen y "Cobrar" siempre a la vista ═══ */
+.cart__chev{display:none;transition:transform .2s}
+
+/* Pantallas grandes: el resumen se queda fijo al lado y solo desplazan los productos y las líneas del carrito */
+@media (min-width:1181px){
+  .cart{top:16px;max-height:calc(100dvh - 240px)}   /* cabe en pantalla incluso sin desplazar: "Cobrar" nunca queda abajo del borde */
+  .cart__lines{flex:1 1 auto;min-height:120px;max-height:none}
+  .cart__foot{flex-shrink:0}
+  .pgrid{max-height:calc(100dvh - 300px);overflow-y:auto;overscroll-behavior:contain;padding:2px 8px 8px 2px}
+}
+
+/* Tablet y celular: barra fija abajo con el total y "Cobrar"; el detalle se despliega al tocar el encabezado */
+@media (max-width:1180px){
+  .pos{padding-bottom:140px}
+  .cart{position:fixed;z-index:800;top:auto;left:calc(248px + 12px);right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));
+    max-height:82dvh;border-radius:var(--r-lg);box-shadow:var(--sh-lg)}
+  .cart__head{cursor:pointer;padding:10px 16px;border-bottom:1px solid var(--line)}
+  .cart__head .card__title{font-size:14px}
+  .cart__chev{display:inline-block}
+  .cart--open .cart__chev{transform:rotate(180deg)}
+  .cart__lines{display:none;min-height:0}
+  .cart--open .cart__lines{display:block;max-height:calc(82dvh - 170px);overflow-y:auto;overscroll-behavior:contain}
+  .cart__foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px}
+  .cart__sum{flex:1;margin:0;min-width:120px}
+  .cart__sum strong{font-size:24px}
+  .cart__foot .btn{width:auto;flex:0 0 auto;min-width:150px}
+  .cart__foot .link-btn{display:none}
+  .cart--open .cart__foot .link-btn{display:block;width:100%;margin:2px 0 0!important}
+}
+@media (max-width:1020px){ .cart{left:calc(78px + 12px)} }
+@media (max-width:760px){
+  .pos{padding-bottom:190px}
+  .cart{left:8px;right:8px;bottom:calc(68px + env(safe-area-inset-bottom,0px) + 8px)}   /* encima de la barra de navegación */
+}
