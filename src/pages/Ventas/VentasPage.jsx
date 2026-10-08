@@ -14,7 +14,7 @@ import ProductImageViewer from '../../components/UI/ProductImageViewer'
 import Sprig           from '../../components/UI/Sprig'
 import PaymentModal    from './components/PaymentModal'
 import SaleDetailModal from './components/SaleDetailModal'
-import { fmt, fmtDate } from '../../utils/format'
+import { fmt, fmtDate, parseCopInput, formatCopInput } from '../../utils/format'
 
 const GRID_SIZE = 60
 
@@ -61,6 +61,7 @@ export default function VentasPage() {
   const [detailId, setDetailId] = useState(null)
   const [histSearch, setHistSearch] = useState('')
   const [imageToView, setImageToView] = useState(null)
+  const [discountInput, setDiscountInput] = useState('')
   const scanRef = useRef(null)
 
   const notify = useCallback((text, type = 'ok') => { setMsg({ text, type }); setTimeout(() => setMsg({ text: '', type: 'ok' }), 3500) }, [])
@@ -126,13 +127,17 @@ export default function VentasPage() {
     setCart(p => p.map(i => { if (i.variantId !== id) return i; const q = Math.min(qty, i.maxStock); return { ...i, qty: q, lineTotal: q * i.unitPrice } }))
   }
   const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0)
+  const rawDiscount = parseCopInput(discountInput)
+  const discountInvalid = rawDiscount > 0 && subtotal > 0 && rawDiscount >= subtotal
+  const discountAmt = discountInvalid ? 0 : rawDiscount
+  const totalToPay = Math.max(0, subtotal - discountAmt)
   const units = cart.reduce((s, i) => s + i.qty, 0)
 
   const confirmSale = async ({ payments, notes, customerId, installments, financingPct }) => {
     setPaying(false)
     setCartOpen(false)
-    const r = await window.electronAPI.sales.createSale({ items: cart.map(i => ({ variantId: i.variantId, qty: i.qty, discountPct: 0 })), payments, notes, customerId, installments, financingPct })
-    if (r.ok) { notify(`Venta registrada — ${r.invoice}`); setCart([]); loadCaja(); setReload(n => n + 1) }
+    const r = await window.electronAPI.sales.createSale({ items: cart.map(i => ({ variantId: i.variantId, qty: i.qty, discountPct: 0 })), discountAmt, payments, notes, customerId, installments, financingPct })
+    if (r.ok) { notify(`Venta registrada — ${r.invoice}`); setCart([]); setDiscountInput(''); loadCaja(); setReload(n => n + 1) }
     else notify(r.error, 'error')
   }
 
@@ -252,11 +257,17 @@ export default function VentasPage() {
               ))}
             </div>
             <div className="cart__foot">
-              <div className="cart__sum"><span>Total</span><strong>{fmt(subtotal)}</strong></div>
-              <PrimaryButton size="lg" fullWidth disabled={!caja || cart.length === 0} onClick={() => setPaying(true)}>
+              <div className="cart__sum"><span>Subtotal</span><strong style={{ fontSize: 18 }}>{fmt(subtotal)}</strong></div>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label className="field__label" htmlFor="sale-discount">Descuento ($)</label>
+                <input id="sale-discount" className={`input input--money ${discountInvalid ? 'input--error' : ''}`} type="text" inputMode="numeric" autoComplete="off" value={discountInput} onChange={e => setDiscountInput(formatCopInput(e.target.value))} placeholder="0" />
+                {discountInvalid && <p className="field__error">El descuento debe ser menor al subtotal.</p>}
+              </div>
+              <div className="cart__sum"><span>Total a cobrar</span><strong>{fmt(totalToPay)}</strong></div>
+              <PrimaryButton size="lg" fullWidth disabled={!caja || cart.length === 0 || discountInvalid} onClick={() => setPaying(true)}>
                 <Wallet size={20} /> {!caja ? 'Abre la caja primero' : 'Cobrar'}
               </PrimaryButton>
-              {cart.length > 0 && <button type="button" className="link-btn" style={{ display: 'block', margin: '12px auto 0', color: 'var(--muted)' }} onClick={() => setCart([])}>Limpiar resumen</button>}
+              {cart.length > 0 && <button type="button" className="link-btn" style={{ display: 'block', margin: '12px auto 0', color: 'var(--muted)' }} onClick={() => { setCart([]); setDiscountInput('') }}>Limpiar resumen</button>}
             </div>
           </aside>
         </div>
@@ -297,7 +308,7 @@ export default function VentasPage() {
       {imageToView && <ProductImageViewer src={imageToView.src} name={imageToView.name} onClose={() => setImageToView(null)} />}
 
       {selecting && <VariantSelector variants={selecting.variants} productName={selecting.productName} onSelect={handleSelectVariant} onClose={() => setSelecting(null)} />}
-      {paying && <PaymentModal total={subtotal} onConfirm={confirmSale} onClose={() => setPaying(false)} />}
+      {paying && <PaymentModal total={totalToPay} onConfirm={confirmSale} onClose={() => setPaying(false)} />}
       {detailId && <SaleDetailModal saleId={detailId} onClose={() => setDetailId(null)} onCancelled={() => loadHistorial(histSearch)} />}
     </PageContainer>
   )

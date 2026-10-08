@@ -64,6 +64,24 @@ export async function createSale(payload) {
         lineItems.push({ variantId: variant.id, productName: product.name, size: variant.size, color: variant.color, unitPrice, qty, discPct, lineTotal })
       }
 
+            // Descuento en pesos sobre toda la venta: se reparte entre las líneas para que subtotal y reportes cuadren
+      const grossSubtotal = subtotal
+      const discountAmt = Math.round(Number(payload.discountAmt ?? 0))
+      if (!Number.isFinite(discountAmt) || discountAmt < 0) fail('Descuento inválido')
+      if (discountAmt > 0) {
+        if (discountAmt >= grossSubtotal) fail('El descuento debe ser menor al subtotal de la venta')
+        let left = discountAmt
+        lineItems.forEach((li, idx) => {
+          const part = idx === lineItems.length - 1
+            ? left
+            : Math.round(discountAmt * li.lineTotal / grossSubtotal)
+          const applied = Math.min(part, li.lineTotal, left)
+          li.lineTotal -= applied
+          left -= applied
+        })
+        subtotal = lineItems.reduce((s, li) => s + li.lineTotal, 0)
+      }
+
       const taxAmt = Math.round(subtotal * (taxRate / 100))
       const total = subtotal + taxAmt
 
@@ -155,8 +173,7 @@ export async function createSale(payload) {
 
       await save('invoices', { id: uuid(), sale_id: saleId, created_at: tsAt(base, 0) })
       await save('settings', { key: 'invoice_next', value: String(nextNum + 1) })
-      await audit('create_sale', 'sale', saleId, { invoice, total: chargedTotal, items: lineItems.length })
-
+      await audit('create_sale', 'sale', saleId, { invoice, total: chargedTotal, items: lineItems.length, discount: discountAmt })
       return { ok: true, saleId, invoice, total: chargedTotal, baseTotal: total, taxAmt, subtotal }
     })
   } catch (e) {
