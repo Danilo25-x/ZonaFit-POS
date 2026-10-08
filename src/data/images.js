@@ -4,7 +4,10 @@ import { db, uuid, nowIso } from './db.js'
 
 const MAX_INPUT_BYTES = 10 * 1024 * 1024
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024
-const DATA_PREFIX = 'data:image/webp;base64,'
+const DATA_FORMATS = {
+  'data:image/webp;base64,': { mime: 'image/webp', ext: 'webp' },
+  'data:image/jpeg;base64,': { mime: 'image/jpeg', ext: 'jpg' },   // Safari (iPhone) no genera WebP
+}
 const urlCache = new Map()
 let remoteFetcher = null
 const missingUntil = new Map()   // fotos que el servidor no tiene: no se vuelven a pedir durante 10 min
@@ -16,10 +19,14 @@ export const setRemoteImageFetcher = (fn) => { remoteFetcher = fn }
 
 export async function saveDataUrl(dataUrl) {
   if (!dataUrl) return null
-  if (typeof dataUrl !== 'string' || !dataUrl.startsWith(DATA_PREFIX)) {
-    throw new Error('La imagen debe procesarse como WebP antes de guardarse')
+  const prefix = typeof dataUrl === 'string'
+    ? Object.keys(DATA_FORMATS).find((p) => dataUrl.startsWith(p))
+    : null
+  if (!prefix) {
+    throw new Error('La imagen debe procesarse como WebP o JPEG antes de guardarse')
   }
-  const base64 = dataUrl.slice(DATA_PREFIX.length)
+  const { mime, ext } = DATA_FORMATS[prefix]
+  const base64 = dataUrl.slice(prefix.length)
   if (!base64 || Math.floor(base64.length * 3 / 4) > MAX_INPUT_BYTES) {
     throw new Error('La imagen original es demasiado grande')
   }
@@ -34,13 +41,15 @@ export async function saveDataUrl(dataUrl) {
     throw new Error('La imagen procesada supera el tamaño máximo permitido')
   }
   const ascii = (a, b) => String.fromCharCode(...bytes.subarray(a, b))
-  if (bytes.length < 12 || ascii(0, 4) !== 'RIFF' || ascii(8, 12) !== 'WEBP') {
-    throw new Error('El archivo procesado no es un WebP válido')
+  const isWebp = bytes.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP'
+  const isJpeg = bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF
+  if ((mime === 'image/webp' && !isWebp) || (mime === 'image/jpeg' && !isJpeg)) {
+    throw new Error('El archivo procesado no es una imagen válida')
   }
 
-  const path = `products/${uuid()}.webp`
+  const path = `products/${uuid()}.${ext}`
   await db.images.put({
-    path, blob: new Blob([bytes], { type: 'image/webp' }),
+    path, blob: new Blob([bytes], { type: mime }),
     uploaded: 0, deleted: 0, updated_at: nowIso(),
   })
   return path

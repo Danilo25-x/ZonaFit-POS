@@ -63,8 +63,7 @@ export function createSupabaseRemote(sb = getSupabase()) {
       return rows?.[0]?.invoice_number ?? null
     },
     async uploadImage(path, blob) {
-      await call(() => sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/webp', upsert: true }))
-    },
+await call(() => sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || 'image/webp', upsert: true }))    },
     async removeImage(path) { await call(() => sb.storage.from(BUCKET).remove([path])) },
     /** Descarga una foto SOLO si existe (se consulta antes: pedir un archivo inexistente deja un error 400 en la consola). */
     async downloadImage(path) {
