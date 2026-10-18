@@ -6,7 +6,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const money = (n) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(n) || 0)
 const when = (iso) => (iso ? new Date(iso).toLocaleString('es-CO') : '')
 
-const CSS = `<style>body{font-family:Arial,sans-serif;color:#111827;padding:32px;font-size:11px}h1{font-size:22px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 8px;border-bottom:1px solid #ddd;padding-bottom:6px}.muted{color:#6b7280}.row{display:flex;justify-content:space-between;padding:5px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.box{border:1px solid #e5e7eb;border-radius:8px;padding:10px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px;border-bottom:1px solid #eee}th{background:#f9fafb;font-size:10px;text-transform:uppercase}.total{font-size:16px;font-weight:800}.good{color:#166534}.bad{color:#b91c1c}@page{margin:14mm}</style>`
+const CSS = `<style>body{font-family:Arial,sans-serif;color:#111827;padding:32px;font-size:12px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 8px;border-bottom:1px solid #ddd;padding-bottom:6px}.muted{color:#6b7280}.row{display:flex;justify-content:space-between;padding:5px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.box{border:1px solid #e5e7eb;border-radius:8px;padding:10px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px;border-bottom:1px solid #eee}th{background:#f9fafb;font-size:12px;text-transform:uppercase}.total{font-size:16px;font-weight:800}.good{color:#166534}.bad{color:#b91c1c}@page{margin:14mm}</style>`
 
 async function setting(key) { return (await db.settings.get(key))?.value || '' }
 

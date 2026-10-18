@@ -257,7 +257,7 @@ export default function VentasPage() {
               ))}
             </div>
             <div className="cart__foot">
-              <div className="cart__sum"><span>Subtotal</span><strong style={{ fontSize: 18 }}>{fmt(subtotal)}</strong></div>
+              <div className="cart__sum"><span>Subtotal</span><strong style={{ fontSize: 16 }}>{fmt(subtotal)}</strong></div>
               <div className="field" style={{ marginBottom: 12 }}>
                 <label className="field__label" htmlFor="sale-discount">Descuento ($)</label>
                 <input id="sale-discount" className={`input input--money ${discountInvalid ? 'input--error' : ''}`} type="text" inputMode="numeric" autoComplete="off" value={discountInput} onChange={e => setDiscountInput(formatCopInput(e.target.value))} placeholder="0" />

@@ -1,30 +1,44 @@
-/* Zona Fit Orito — tokens de marca (dorado / crema / marrón oscuro).
-   Se conservan los nombres --plum-* y --orchid/--blush/--lavender para no tocar
-   el resto del proyecto: ahora "plum" = marrón oscuro → dorado. */
+/* Zona Fit Orito — modelo oscuro (dorado sobre marrón profundo).
+   Se conservan los nombres --plum-* y --orchid/--blush/--lavender para no tocar componentes:
+   "plum" = escala de marca (marrón → dorado). Todo el texto sobre dorado usa --on-gold (oscuro). */
+@font-face{font-family:'Montserrat Variable';src:local('Montserrat');font-display:swap}
+
 :root{
-  /* Escala de marca: marrón cálido (950–800) → dorado suave (700–50) */
-  --plum-950:#1E1A14; --plum-900:#26211A; --plum-850:#2E281F; --plum-800:#3B3428;
-  --plum-700:#8A6A1F; --plum-600:#C29A2E; --plum-500:#CFAE55; --plum-400:#DBC077;
-  --plum-300:#E6D3A0; --plum-200:#EFE2BE; --plum-100:#F5ECD3; --plum-50:#F9F3E3;
-  /* Acentos del logo (más suaves para descansar la vista) */
-  --orchid:#D9B450; --blush:#E8CF8A; --lavender:#E6D3A0;
-  --gold-grad:linear-gradient(135deg,#D8B45E,#C9A03A 55%,#B88A2A);
-  /* Superficies y texto: fondo beige apagado, sin blanco puro */
-  --canvas:#F4EFE3; --surface:#FBF8F0; --line:#E6DCC0; --line-strong:#D8CBA6;
-  --ink:#2B251C; --ink-2:#4a4131; --muted:#6f6450; --faint:#9c9276;
-  /* Estados (warn en naranja para no confundirse con el dorado de marca) */
-  --ok:#17724c; --ok-bg:#e2f4ea; --ok-line:#b7e0c9;
-  --warn:#9a4a0b; --warn-bg:#fde7d4; --warn-line:#f3c79c;
-  --bad:#b3304b; --bad-bg:#fce6eb; --bad-line:#f4b9c6;
-  /* Tipografía */
+  color-scheme: dark;
+
+  /* Escala de marca: marrón profundo (950–800) → dorado (700–50) */
+  --plum-950:#0F0C08; --plum-900:#15120D; --plum-850:#1A160F; --plum-800:#221D14;
+  --plum-700:#E3C978; --plum-600:#C29A2E; --plum-500:#CFAE55; --plum-400:#DBC077;
+  --plum-300:#6E5D34; --plum-200:#3A3120; --plum-100:#2A2418; --plum-50:#1F1B13;
+
+  /* Acentos (suaves, para no competir con el texto) */
+  --orchid:#D8B45E; --blush:#E3C978; --lavender:#CDBB8C;
+  --gold-grad:linear-gradient(135deg,#D8B45E,#C29A2E 60%,#A97F22);
+
+  /* Superficies y texto */
+  --canvas:#15120D; --surface:#1F1B15; --surface-2:#252018;
+  --line:#3A3223; --line-strong:#806F4A;
+  --ink:#F4EBD6; --ink-2:#D9CDB0; --muted:#A89B7E; --placeholder:#9A8C6B; --faint:#6F6550;
+  --on-gold:#15120D;                       /* texto sobre dorado: 7.1:1 */
+  --cream-alpha:244,235,214;               /* para rgba() sobre el fondo oscuro */
+
+  /* Estados (sobre fondo oscuro) */
+  --ok:#8BD3A8;   --ok-bg:rgba(139,211,168,.14);  --ok-line:rgba(139,211,168,.35);
+  --warn:#F0A35E; --warn-bg:rgba(240,163,94,.14); --warn-line:rgba(240,163,94,.4);
+  --bad:#E88080;  --bad-bg:rgba(232,128,128,.14); --bad-line:rgba(232,128,128,.4);
+
+  /* Tipografía: una familia, una escala (12 13 14 15 16 20 28 32) */
   --font-ui:'Montserrat Variable','Montserrat','Segoe UI',system-ui,-apple-system,sans-serif;
   --font-display:'Montserrat Variable','Montserrat','Segoe UI',system-ui,sans-serif;
-  /* Radios por rol */
-  --r-sm:8px; --r-md:12px; --r-lg:18px; --r-xl:24px;
-  /* Sombras teñidas de marrón */
-  --sh-sm:0 1px 2px rgba(43,37,28,.05),0 1px 1px rgba(43,37,28,.03);
-  --sh-md:0 10px 28px -10px rgba(43,37,28,.18);
-  --sh-lg:0 30px 70px -18px rgba(20,16,10,.5);
+  --fs-xs:12px; --fs-sm:13px; --fs-base:14px; --fs-md:15px; --fs-lg:16px; --fs-xl:20px; --fs-2xl:28px; --fs-3xl:32px;
+
+  /* Radios */
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px;
+
+  /* Sombras: solo en capas flotantes (modal, menús); las tarjetas se separan con borde */
+  --sh-sm:none;
+  --sh-md:0 12px 30px -14px rgba(0,0,0,.55);
+  --sh-lg:0 30px 70px -18px rgba(0,0,0,.7);
 }
 
 html, body, #root, button, input, textarea, select, option{

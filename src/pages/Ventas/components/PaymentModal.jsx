@@ -88,7 +88,7 @@ export default function PaymentModal({ total, onConfirm, onClose }) {
           {change > 0 && (
             <div className="notice notice--ok" style={{ marginTop: 10, justifyContent: 'space-between', alignItems: 'center' }}>
               <strong>Cambio a entregar</strong>
-              <strong style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>{fmt(change)}</strong>
+              <strong style={{ fontFamily: 'var(--font-display)', fontSize: 20 }}>{fmt(change)}</strong>
             </div>
           )}
         </div>

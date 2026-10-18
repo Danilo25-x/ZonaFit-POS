@@ -270,7 +270,7 @@ export function syncNow(remoteFactory = createSupabaseRemote) {
   running = (async () => {
     try {
       const result = await runSync(remoteFactory())
-      if (result.ok) setStatus({ state: 'idle', lastSync: nowIso(), error: null })
+      if (result.ok) { setStatus({ state: 'idle', lastSync: nowIso(), error: null }); markSynced() }
       await refreshPending()
       return result
     } catch (e) {
@@ -293,23 +293,28 @@ export function syncNow(remoteFactory = createSupabaseRemote) {
   return running
 }
 
-/** Sincronización automática: tras un error espera 30 s antes de reintentar (tocar el indicador sí reintenta al instante). */
+// Sincronización automática: UNA VEZ AL DÍA, o cuando el usuario pulsa "Sincronizar ahora".
+// Sincronizar en cada cambio o cada minuto subía las 18 tablas (incluida auditoría) una y otra vez.
+const AUTO_SYNC_EVERY_MS = 24 * 60 * 60 * 1000
+const LAST_SYNC_KEY = 'zonafit-last-sync-ms'
+const readLastSync = () => Number(localStorage.getItem(LAST_SYNC_KEY) || 0)
+const markSynced = () => { try { localStorage.setItem(LAST_SYNC_KEY, String(Date.now())) } catch { /* sin almacenamiento: se reintenta al abrir */ } }
+
+/** Tras un error espera 30 s antes de reintentar. Si ya se sincronizó hoy, no hace nada. */
 export function autoSync() {
+  if (Date.now() - readLastSync() < AUTO_SYNC_EVERY_MS) return Promise.resolve({ ok: false, reason: 'not-due' })
   if (status.state === 'error' && Date.now() - errorAt < 30_000) return Promise.resolve({ ok: false, reason: 'cooldown' })
   return syncNow()
 }
-
-let writeTimer = null
 /**
- * Se entera de cada cambio local para actualizar "pendientes" y sincronizar poco después.
+ * Se entera de cada cambio local solo para actualizar el contador de "pendientes".
+ * No sincroniza: eso ocurre una vez al día o con "Sincronizar ahora".
  * IMPORTANTE: save() se ejecuta dentro de transacciones de Dexie; leer otras tablas desde ahí
- * da NotFoundError (la transacción solo incluye sus propias tablas). Por eso todo va fuera de la transacción.
+ * da NotFoundError, por eso se usa Dexie.ignoreTransaction.
  */
 export function installWriteHook() {
   onWrite(() => {
     Dexie.ignoreTransaction(() => { refreshPending().catch(() => {}) })
-    clearTimeout(writeTimer)
-    writeTimer = setTimeout(() => Dexie.ignoreTransaction(() => { autoSync() }), 4000)
   })
 }
 
@@ -321,10 +326,9 @@ export function startAutoSync() {
   setRemoteImageFetcher(async (path) => { try { return await factory().downloadImage(path) } catch { return null } })
 
   installWriteHook()
-  window.addEventListener('online', () => setTimeout(() => autoSync(), 1500))   // la red tarda un instante en estabilizarse
   window.addEventListener('offline', () => setStatus({ state: 'offline' }))
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) autoSync() })
-  setInterval(() => autoSync(), 60_000)
+  // Revisa cada hora si ya toca sincronizar: solo lo hace si pasó un día desde la última vez.
+  setInterval(() => autoSync(), 60 * 60 * 1000)
   refreshPending().catch(() => {})
   autoSync()
 }

@@ -217,7 +217,7 @@ export default function ProductFormModal({ isOpen, onClose, onSaved, product, ca
       <div className="field">
         <span className="field__label">Imagen del producto</span>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          <div className="product-image-preview" style={{ width: 110, height: 110, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line, #ddd)', display: 'grid', placeItems: 'center', background: '#f7f7f7' }}>
+          <div className="product-image-preview" style={{ width: 110, height: 110, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line, #ddd)', display: 'grid', placeItems: 'center', background: 'var(--plum-50)' }}>
             {imagePreview
               ? <img src={imagePreview} alt="Vista previa del producto" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <ImagePlus size={30} strokeWidth={1.4} />}

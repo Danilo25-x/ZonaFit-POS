@@ -4,7 +4,7 @@ import { getSupabase } from './supabase.js'
 import { db, nowIso } from './db.js'
 import { audit } from './audit.js'
 import { getUser, setUser, ADMIN_PERMISSIONS } from './session.js'
-import { syncNow } from './sync.js'
+import { autoSync } from './sync.js'
 
 const CACHE_KEY = 'zf_last_user'
 
@@ -60,7 +60,7 @@ export async function login({ username, password } = {}) {
   const user = toUser(data.user, profile)
   setUser(user); cacheUser(user)
   await audit('login_success', 'user', user.id, { username: email })
-  syncNow()   // primera sincronización al entrar (sin esperar)
+  autoSync()  // al entrar sincroniza solo si ya pasó un día desde la última vez (o nunca se ha sincronizado)
   return { ok: true, user }
 }
 

@@ -134,7 +134,7 @@ export default function SettingsPage() {
         </nav>
 
         <section className="card">
-          <div className="section-title" style={{ marginBottom: 4 }}><h2 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>{current.label}</h2></div>
+          <div className="section-title" style={{ marginBottom: 4 }}><h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{current.label}</h2></div>
           <p className="page__sub" style={{ marginBottom: 22 }}>{current.desc}</p>
 
           {section === 'Seguridad' ? (
