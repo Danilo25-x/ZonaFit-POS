@@ -301,9 +301,18 @@ const readLastSync = () => Number(localStorage.getItem(LAST_SYNC_KEY) || 0)
 const markSynced = () => { try { localStorage.setItem(LAST_SYNC_KEY, String(Date.now())) } catch { /* sin almacenamiento: se reintenta al abrir */ } }
 
 /** Tras un error espera 30 s antes de reintentar. Si ya se sincronizó hoy, no hace nada. */
+// Límite de seguridad: si un intento automático falla, no se repite antes de 1 hora,
+// aunque se recargue la página o se dispare de nuevo. Evita reintentos en cadena.
+const LAST_ATTEMPT_KEY = 'zonafit-last-attempt-ms'
+const RETRY_AFTER_FAILURE_MS = 60 * 60 * 1000
+const readLastAttempt = () => Number(localStorage.getItem(LAST_ATTEMPT_KEY) || 0)
+const markAttempt = () => { try { localStorage.setItem(LAST_ATTEMPT_KEY, String(Date.now())) } catch { /* sin almacenamiento */ } }
+
 export function autoSync() {
-  if (Date.now() - readLastSync() < AUTO_SYNC_EVERY_MS) return Promise.resolve({ ok: false, reason: 'not-due' })
-  if (status.state === 'error' && Date.now() - errorAt < 30_000) return Promise.resolve({ ok: false, reason: 'cooldown' })
+  const now = Date.now()
+  if (now - readLastSync() < AUTO_SYNC_EVERY_MS) return Promise.resolve({ ok: false, reason: 'not-due' })
+  if (now - readLastAttempt() < RETRY_AFTER_FAILURE_MS) return Promise.resolve({ ok: false, reason: 'retry-later' })
+  markAttempt()
   return syncNow()
 }
 /**
