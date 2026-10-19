@@ -1,5 +1,6 @@
 .app{display:flex;height:100vh;overflow:hidden;background:var(--canvas)}
-.main{flex:1;min-width:0;overflow-y:auto}
+.main{flex:1;min-width:0;overflow-y:auto;
+  background:radial-gradient(900px 560px at 100% -8%,rgba(194,154,46,.07),transparent 72%),radial-gradient(620px 500px at 8% 78%,rgba(194,154,46,.025),transparent 72%),var(--canvas)}
 
 .sidebar{position:relative;width:248px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;color:var(--ink);
   background:radial-gradient(120% 55% at 50% 0%,rgba(194,154,46,.14) 0%,transparent 62%),linear-gradient(180deg,var(--plum-850),var(--plum-950))}
